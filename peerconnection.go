@@ -29,9 +29,6 @@ type PeerConnection struct {
 	statsID string
 	mu      sync.RWMutex
 
-	// Negotiations must be processed serially
-	negotationLock sync.Mutex
-
 	configuration Configuration
 
 	currentLocalDescription  *SessionDescription
@@ -730,7 +727,7 @@ func (pc *PeerConnection) SetRemoteDescription(desc SessionDescription) error {
 	}
 
 	if haveRemoteDescription {
-		pc.startRenegotation(currentTransceivers)
+		go pc.startRenegotation(currentTransceivers)
 		return nil
 	}
 
@@ -749,7 +746,7 @@ func (pc *PeerConnection) SetRemoteDescription(desc SessionDescription) error {
 		return err
 	}
 
-	remoteUfrag, remotePwd, candidates, err := extractICEDetails(desc.parsed)
+	remoteUfrag, remotePwd, iceOptions, candidates, err := extractICEDetails(desc.parsed)
 	if err != nil {
 		return err
 	}
@@ -770,7 +767,7 @@ func (pc *PeerConnection) SetRemoteDescription(desc SessionDescription) error {
 
 	// Start the networking in a new routine since it will block until
 	// the connection is actually established.
-	pc.startTransports(iceRole, dtlsRoleFromRemoteSDP(desc.parsed), remoteUfrag, remotePwd, fingerprint, fingerprintHash, currentTransceivers, trackDetailsFromSDP(pc.log, desc.parsed))
+	go pc.startTransports(iceRole, dtlsRoleFromRemoteSDP(desc.parsed), remoteUfrag, remotePwd, iceOptions, fingerprint, fingerprintHash, currentTransceivers, trackDetailsFromSDP(pc.log, desc.parsed))
 	return nil
 }
 
@@ -962,12 +959,12 @@ func (pc *PeerConnection) drainSRTP() {
 
 			_, ssrc, err := srtpSession.AcceptStream()
 			if err != nil {
-				pc.log.Warnf("Failed to accept RTP %v", err)
+				pc.log.Warnf("Failed to accept RTP %v \n", err)
 				return
 			}
 
 			if !handleUndeclaredSSRC(ssrc) {
-				pc.log.Warnf("Incoming unhandled RTP ssrc(%d), OnTrack will not be fired", ssrc)
+				pc.log.Errorf("Incoming unhandled RTP ssrc(%d)", ssrc)
 			}
 		}
 	}()
@@ -982,10 +979,10 @@ func (pc *PeerConnection) drainSRTP() {
 
 			_, ssrc, err := srtcpSession.AcceptStream()
 			if err != nil {
-				pc.log.Warnf("Failed to accept RTCP %v", err)
+				pc.log.Warnf("Failed to accept RTCP %v \n", err)
 				return
 			}
-			pc.log.Warnf("Incoming unhandled RTCP ssrc(%d), OnTrack will not be fired", ssrc)
+			pc.log.Errorf("Incoming unhandled RTCP ssrc(%d)", ssrc)
 		}
 	}()
 }
@@ -1538,75 +1535,64 @@ func (pc *PeerConnection) GetStats() StatsReport {
 }
 
 // Start all transports. PeerConnection now has enough state
-func (pc *PeerConnection) startTransports(iceRole ICERole, dtlsRole DTLSRole, remoteUfrag, remotePwd, fingerprint, fingerprintHash string, currentTransceivers []*RTPTransceiver, incomingTracks map[uint32]trackDetails) {
-	pc.negotationLock.Lock()
+func (pc *PeerConnection) startTransports(iceRole ICERole, dtlsRole DTLSRole, remoteUfrag, remotePwd, iceOptions, fingerprint, fingerprintHash string, currentTransceivers []*RTPTransceiver, incomingTracks map[uint32]trackDetails) {
+	// Start the ice transport
+	err := pc.iceTransport.Start(
+		pc.iceGatherer,
+		ICEParameters{
+			UsernameFragment: remoteUfrag,
+			Password:         remotePwd,
+			ICELite:          false,
+			ICEOptions:       iceOptions,
+		},
+		&iceRole,
+	)
+	if err != nil {
+		pc.log.Warnf("Failed to start manager: %s", err)
+		return
+	}
 
-	go func() {
-		defer pc.negotationLock.Unlock()
+	// Start the dtls transport
+	err = pc.dtlsTransport.Start(DTLSParameters{
+		Role:         dtlsRole,
+		Fingerprints: []DTLSFingerprint{{Algorithm: fingerprintHash, Value: fingerprint}},
+	})
+	pc.updateConnectionState(pc.ICEConnectionState(), pc.dtlsTransport.State())
+	if err != nil {
+		pc.log.Warnf("Failed to start manager: %s", err)
+		return
+	}
 
-		// Start the ice transport
-		err := pc.iceTransport.Start(
-			pc.iceGatherer,
-			ICEParameters{
-				UsernameFragment: remoteUfrag,
-				Password:         remotePwd,
-				ICELite:          false,
-			},
-			&iceRole,
-		)
-		if err != nil {
-			pc.log.Warnf("Failed to start manager: %s", err)
-			return
-		}
-
-		// Start the dtls transport
-		err = pc.dtlsTransport.Start(DTLSParameters{
-			Role:         dtlsRole,
-			Fingerprints: []DTLSFingerprint{{Algorithm: fingerprintHash, Value: fingerprint}},
-		})
-		pc.updateConnectionState(pc.ICEConnectionState(), pc.dtlsTransport.State())
-		if err != nil {
-			pc.log.Warnf("Failed to start manager: %s", err)
-			return
-		}
-
-		pc.startRTPReceivers(incomingTracks, currentTransceivers)
-		pc.startRTPSenders(currentTransceivers)
-		pc.drainSRTP()
-		pc.startSCTP()
-	}()
+	pc.startRTPReceivers(incomingTracks, currentTransceivers)
+	pc.startRTPSenders(currentTransceivers)
+	pc.drainSRTP()
+	pc.startSCTP()
 }
 
 func (pc *PeerConnection) startRenegotation(currentTransceivers []*RTPTransceiver) {
-	pc.negotationLock.Lock()
-
-	go func() {
-		defer pc.negotationLock.Unlock()
-
-		trackDetails := trackDetailsFromSDP(pc.log, pc.RemoteDescription().parsed)
-		for _, t := range currentTransceivers {
-			if t.Receiver() == nil || t.Receiver().Track() == nil {
-				continue
-			} else if _, ok := trackDetails[t.Receiver().Track().ssrc]; ok {
-				continue
-			}
-
-			if err := t.Receiver().Stop(); err != nil {
-				pc.log.Warnf("Failed to stop RtpReceiver: %s", err)
-				continue
-			}
-
-			receiver, err := pc.api.NewRTPReceiver(t.Receiver().kind, pc.dtlsTransport)
-			if err != nil {
-				pc.log.Warnf("Failed to create new RtpReceiver: %s", err)
-				continue
-			}
-			t.setReceiver(receiver)
+	trackDetails := trackDetailsFromSDP(pc.log, pc.RemoteDescription().parsed)
+	for _, t := range currentTransceivers {
+		if t.Receiver() == nil || t.Receiver().Track() == nil {
+			continue
+		} else if _, ok := trackDetails[t.Receiver().Track().ssrc]; ok {
+			continue
 		}
 
-		pc.startRTPSenders(currentTransceivers)
-		pc.startRTPReceivers(trackDetails, currentTransceivers)
-	}()
+		if err := t.Receiver().Stop(); err != nil {
+			pc.log.Warnf("Failed to stop RtpReceiver: %s", err)
+			continue
+		}
+
+		receiver, err := pc.api.NewRTPReceiver(t.Receiver().kind, pc.dtlsTransport)
+		if err != nil {
+			pc.log.Warnf("Failed to create new RtpReceiver: %s", err)
+			continue
+		}
+		t.setReceiver(receiver)
+	}
+
+	pc.startRTPSenders(currentTransceivers)
+	pc.startRTPReceivers(trackDetails, currentTransceivers)
 }
 
 // GetRegisteredRTPCodecs gets a list of registered RTPCodec from the underlying constructed MediaEngine

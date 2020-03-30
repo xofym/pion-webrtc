@@ -10,6 +10,7 @@ import (
 
 	"github.com/pion/logging"
 	"github.com/pion/sdp/v2"
+	"github.com/rs/zerolog/log"
 )
 
 type trackDetails struct {
@@ -22,7 +23,6 @@ type trackDetails struct {
 // extract all trackDetails from an SDP.
 func trackDetailsFromSDP(log logging.LeveledLogger, s *sdp.SessionDescription) map[uint32]trackDetails {
 	incomingTracks := map[uint32]trackDetails{}
-	rtxRepairFlows := map[uint32]bool{}
 
 	for _, media := range s.MediaDescriptions {
 		for _, attr := range media.Attributes {
@@ -31,39 +31,12 @@ func trackDetailsFromSDP(log logging.LeveledLogger, s *sdp.SessionDescription) m
 				continue
 			}
 
-			if attr.Key == sdp.AttrKeySSRCGroup {
-				split := strings.Split(attr.Value, " ")
-				if split[0] == sdp.SemanticTokenFlowIdentification {
-					// Add rtx ssrcs to blacklist, to avoid adding them as tracks
-					// Essentially lines like `a=ssrc-group:FID 2231627014 632943048` are processed by this section
-					// as this declares that the second SSRC (632943048) is a rtx repair flow (RFC4588) for the first
-					// (2231627014) as specified in RFC5576
-					if len(split) == 3 {
-						_, err := strconv.ParseUint(split[1], 10, 32)
-						if err != nil {
-							log.Warnf("Failed to parse SSRC: %v", err)
-							continue
-						}
-						rtxRepairFlow, err := strconv.ParseUint(split[2], 10, 32)
-						if err != nil {
-							log.Warnf("Failed to parse SSRC: %v", err)
-							continue
-						}
-						rtxRepairFlows[uint32(rtxRepairFlow)] = true
-						delete(incomingTracks, uint32(rtxRepairFlow)) // Remove if rtx was added as track before
-					}
-				}
-			}
-
 			if attr.Key == sdp.AttrKeySSRC {
 				split := strings.Split(attr.Value, " ")
 				ssrc, err := strconv.ParseUint(split[0], 10, 32)
 				if err != nil {
 					log.Warnf("Failed to parse SSRC: %v", err)
 					continue
-				}
-				if rtxRepairFlow := rtxRepairFlows[uint32(ssrc)]; rtxRepairFlow {
-					continue // This ssrc is a RTX repair flow, ignore
 				}
 				if existingValues, ok := incomingTracks[uint32(ssrc)]; ok && existingValues.label != "" && existingValues.id != "" {
 					continue // This ssrc is already fully defined
@@ -324,10 +297,11 @@ func extractFingerprint(desc *sdp.SessionDescription) (string, string, error) {
 	return parts[1], parts[0], nil
 }
 
-func extractICEDetails(desc *sdp.SessionDescription) (string, string, []ICECandidate, error) {
+func extractICEDetails(desc *sdp.SessionDescription) (string, string, string, []ICECandidate, error) {
 	candidates := []ICECandidate{}
 	remotePwd := ""
 	remoteUfrag := ""
+	iceOptions := ""
 
 	for _, m := range desc.MediaDescriptions {
 		for _, a := range m.Attributes {
@@ -335,12 +309,12 @@ func extractICEDetails(desc *sdp.SessionDescription) (string, string, []ICECandi
 			case a.IsICECandidate():
 				sdpCandidate, err := a.ToICECandidate()
 				if err != nil {
-					return "", "", nil, err
+					return "", "", "", nil, err
 				}
 
 				candidate, err := newICECandidateFromSDP(sdpCandidate)
 				if err != nil {
-					return "", "", nil, err
+					return "", "", "", nil, err
 				}
 
 				candidates = append(candidates, candidate)
@@ -348,15 +322,19 @@ func extractICEDetails(desc *sdp.SessionDescription) (string, string, []ICECandi
 				remoteUfrag = (*a.String())[len("ice-ufrag:"):]
 			case strings.HasPrefix(*a.String(), "ice-pwd"):
 				remotePwd = (*a.String())[len("ice-pwd:"):]
+			case strings.HasPrefix(*a.String(), "ice-options:"):
+				iceOptions = (*a.String())[len("ice-options:"):]
 			}
 		}
 	}
 
 	if remoteUfrag == "" {
-		return "", "", nil, ErrSessionDescriptionMissingIceUfrag
+		return "", "", "", nil, ErrSessionDescriptionMissingIceUfrag
 	} else if remotePwd == "" {
-		return "", "", nil, ErrSessionDescriptionMissingIcePwd
+		return "", "", "", nil, ErrSessionDescriptionMissingIcePwd
 	}
 
-	return remoteUfrag, remotePwd, candidates, nil
+	log.Debug().Msgf("ICE OPTIONS: %s", iceOptions)
+
+	return remoteUfrag, remotePwd, iceOptions, candidates, nil
 }
