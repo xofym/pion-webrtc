@@ -1,4 +1,4 @@
-module github.com/pion/webrtc/v2
+module github.com/xofym/pion-webrtc
 
 go 1.12
 
@@ -14,6 +14,7 @@ require (
 	github.com/pion/sdp/v2 v2.3.5
 	github.com/pion/srtp v1.3.1
 	github.com/pion/transport v0.10.0
+	github.com/rs/zerolog v1.18.0
 	github.com/sclevine/agouti v3.0.0+incompatible
 	github.com/stretchr/testify v1.5.1
 )
