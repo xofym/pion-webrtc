@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/pion/logging"
-	"github.com/pion/webrtc/v2"
+	webrtc "github.com/xofym/pion-webrtc"
 )
 
 // Everything below is the Pion WebRTC API! Thanks for using it ❤️.

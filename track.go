@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v2/pkg/media"
+	"github.com/xofym/pion-webrtc/pkg/media"
 )
 
 const (

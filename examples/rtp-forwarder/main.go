@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/pion/rtcp"
-	"github.com/pion/webrtc/v2"
-	"github.com/pion/webrtc/v2/examples/internal/signal"
+	webrtc "github.com/xofym/pion-webrtc"
+	"github.com/xofym/pion-webrtc/examples/internal/signal"
 )
 
 type udpConn struct {

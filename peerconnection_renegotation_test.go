@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/pion/transport/test"
-	"github.com/pion/webrtc/v2/pkg/media"
 	"github.com/stretchr/testify/assert"
+	"github.com/xofym/pion-webrtc/pkg/media"
 )
 
 func sendVideoUntilDone(c context.Context, t *testing.T, track *Track) {

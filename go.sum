@@ -48,6 +48,7 @@ github.com/pion/rtp v1.4.0 h1:EkeHEXKuJhZoRUxtL2Ie80vVg9gBH+poT9UoL8M14nw=
 github.com/pion/rtp v1.4.0/go.mod h1:/l4cvcKd0D3u9JLs2xSVI95YkfXW87a3br3nqmVtSlE=
 github.com/pion/sctp v1.7.6 h1:8qZTdJtbKfAns/Hv5L0PAj8FyXcsKhMH1pKUCGisQg4=
 github.com/pion/sctp v1.7.6/go.mod h1:ichkYQ5tlgCQwEwvgfdcAolqx1nHbYCxo4D7zK/K0X8=
+github.com/pion/sdp/v2 v2.3.4/go.mod h1:jccXVYW0fuK6ds2pwKr89SVBDYlCjhgMI6nucl5R5rA=
 github.com/pion/sdp/v2 v2.3.5 h1:DtS9Z9R+E3/mn2jt+RQKBnneK1g+p3PT25+TkQHodfU=
 github.com/pion/sdp/v2 v2.3.5/go.mod h1:+ZZf35r1+zbaWYiZLfPutWfx58DAWcGb2QsS3D/s9M8=
 github.com/pion/srtp v1.3.1 h1:WNDLN41ST0P6cXRpzx97JJW//vChAEo1+Etdqo+UMnM=
@@ -61,6 +62,9 @@ github.com/pion/transport v0.10.0 h1:9M12BSneJm6ggGhJyWpDveFOstJsTiQjkLf4M44rm80
 github.com/pion/transport v0.10.0/go.mod h1:BnHnUipd0rZQyTVB2SBGojFHT9CBt5C5TcsJSQGkvSE=
 github.com/pion/turn/v2 v2.0.3 h1:SJUUIbcPoehlyZgMyIUbBBDhI03sBx32x3JuSIBKBWA=
 github.com/pion/turn/v2 v2.0.3/go.mod h1:kl1hmT3NxcLynpXVnwJgObL8C9NaCyPTeqI2DcCpSZs=
+github.com/pion/webrtc v1.2.0 h1:3LGGPQEMacwG2hcDfhdvwQPz315gvjZXOfY4vaF4+I4=
+github.com/xofym/pion-webrtc v2.2.4 h1:elWyBI/6S2kNoJ5rcTj2EMAvp/fmeiEqiuYbUd0ShRA=
+github.com/xofym/pion-webrtc v2.2.4/go.mod h1:9vTqkEISnB5AXlggrFSBLGSz/kopQuYUYzHubuFpnCU=
 github.com/pkg/errors v0.8.1 h1:iURUrRGxPUNPdy5/HRSm+Yj6okJ6UtLINN0Q9M4+h3I=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=

@@ -6,11 +6,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/pion/webrtc/v2"
-	"github.com/pion/webrtc/v2/pkg/media"
-	"github.com/pion/webrtc/v2/pkg/media/ivfreader"
+	webrtc "github.com/xofym/pion-webrtc"
+	"github.com/xofym/pion-webrtc/pkg/media"
+	"github.com/xofym/pion-webrtc/pkg/media/ivfreader"
 
-	"github.com/pion/webrtc/v2/examples/internal/signal"
+	"github.com/xofym/pion-webrtc/examples/internal/signal"
 )
 
 func main() {
